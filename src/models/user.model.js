@@ -1,8 +1,7 @@
-// import mongoose from "mongoose"
 import mongoose, {Schema} from "mongoose"
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
-import { use } from "react"
+// import { use } from "react"
 
 const userSchema = new Schema({
     username:{
@@ -53,7 +52,7 @@ userSchema.pre("save", async function (next) {
     if(!this.isModified("password")) return next()
 
     this.password = await bcrypt.hash(this.password,10)
-    next()
+    next    // next()-> it's showing error so i used next only
 }) 
 
 userSchema.methods.isPasswordCorrect = async function(password){
