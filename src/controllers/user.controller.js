@@ -4,7 +4,28 @@ import {User} from "../models/user.model.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 
+
+// generating methods for access and refreshtoken 
+const generateAccessAndRefereshTokens = async (userId)=>{
+    try {
+        const user = await User.findById(userId)
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+
+        user.refreshToken = refreshToken
+        await user.save({ validateBeforeSave:false })
+
+        return { accessToken , refreshToken}
+
+
+    } catch (error) {
+        throw new ApiError(500,"something went wrong while generating refresh and access token")
+    }
+}
+
+// user registration complete flow with alogorithm
 const registerUser = asyncHandler( async (req,res) => {
+    // steps to define Register user
     // get user from frontend
     // validation -> not empty
     // check if user already exists -> through email & username
@@ -101,6 +122,113 @@ const registerUser = asyncHandler( async (req,res) => {
 
 } )
 
+//user registration complete flow with alogorithm
+const loginUser = asyncHandler(async (req,res) =>{
+
+    // steps to define login user
+    // collect data from req body
+    // username or email (for login)
+    // find the user
+    //  password check
+    //  access and refresh token generate
+    //  send cookies and send response successfully
+
+
+    //collect data from request body
+    const {email, username, password} = req.body
+
+    // check if username or email is present or nor
+    if(!username || !email){
+        throw new ApiError(400, "username or password is required")
+    }
+
+    //find user by it's email or username (that confirms , he/she is registered)
+    const user = await User.findOne({
+        $or:[{username},{email}]
+    })
+
+    // if user is not find means not registeered
+    if(!user){
+        throw new ApiError(404,"user does not exist")
+    }
+
+    // if user found then check the password
+    // note:- here we use user(small u) because it our operation, not mongodb when mongodb operations does then we will use User (like findOne, findById etc..)
+
+    const isPasswordValid = await user.isPasswordCorrect(password)
+
+    // validate the password
+    if(!isPasswordValid){
+        throw new ApiError(401,"Invalid user credentials")
+    }
+
+    //now generate the access and generate token
+
+    const {accessToken, refreshToken} = await generateAccessAndRefereshTokens(user._id)
+
+    
+
+    const loggedInUser = await User.findById(user._id)
+    select("-password -refreshToken")
+
+    // send it into cookies
+
+    const options = {
+        httpOnly:true,
+        secure:true
+    }
+
+    // send response to user or frontend
+
+    return res
+    .status(200)
+    .cookie("accessToken",accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+        new ApiResponse(
+            200,
+            {
+                user:loggedInUser, accessToken, refreshToken
+            },
+            "User logged In Successfully"
+        )
+    )
+
+})
+
+// LogOut the user
+const logoutUser = asyncHandler(async(req,res)=>{
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                refreshToken:undefined
+            }
+        },
+        {
+            new:true
+        }
+    )
+
+    const options = {
+        httpOnly:true,
+        secure:true
+    }
+
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged out successfully"))
+})
+
+
 //export the register user
 export {registerUser}
+
+//export the login user
+export {loginUser}
+
+// export logout user
+export {logoutUser}
 
